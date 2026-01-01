@@ -1,10 +1,7 @@
 """
-Configuration centralisée de l'application.
-============================================
-Contient toutes les constantes et mappings utilisés dans l'app.
+Configuration centralisée.
 """
 
-# Application metadata
 APP_CONFIG = {
     "title": "Job Hunter CRM",
     "icon": "🎯",
@@ -12,54 +9,47 @@ APP_CONFIG = {
     "version": "2.0.0",
 }
 
-# Palette de couleurs SaaS moderne
 COLORS = {
-    "primary": "#6366F1",      # Indigo
-    "secondary": "#8B5CF6",    # Purple
-    "success": "#10B981",      # Emerald
-    "warning": "#F59E0B",      # Amber
-    "danger": "#EF4444",       # Red
-    "info": "#3B82F6",         # Blue
-    "dark": "#1F2937",         # Gray 800
-    "light": "#F9FAFB",        # Gray 50
-    "muted": "#6B7280",        # Gray 500
+    "primary": "#6366F1",
+    "secondary": "#8B5CF6",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "danger": "#EF4444",
+    "info": "#3B82F6",
+    "dark": "#1F2937",
+    "light": "#F9FAFB",
+    "muted": "#6B7280",
 }
 
-# Configuration des statuts avec couleurs et icônes
 STATUS_CONFIG = {
     "À Analyser": {
         "color": "#F59E0B",
         "icon": "🔍",
         "order": 1,
-        "description": "Nouveau job à examiner"
     },
     "Générer LM": {
         "color": "#8B5CF6",
         "icon": "✍️",
         "order": 2,
-        "description": "Lettre de motivation à créer"
     },
-    "Pret": {
+    "Prêt": {
         "color": "#3B82F6",
         "icon": "📤",
         "order": 3,
-        "description": "Prêt à être envoyé"
     },
     "Postulé": {
         "color": "#10B981",
         "icon": "✅",
         "order": 4,
-        "description": "Candidature envoyée"
     },
     "Refus": {
         "color": "#EF4444",
         "icon": "❌",
         "order": 5,
-        "description": "Candidature refusée"
     },
 }
 
-# Mapping des colonnes Airtable vers noms internes
+# Mapping des colonnes Airtable
 COLUMNS = {
     "poste": "Poste",
     "entreprise": "Entreprise",
@@ -67,6 +57,7 @@ COLUMNS = {
     "url": "URL Offre",
     "description": "Description",
     "date_candidature": "Date de Candidature",
+    "date_scraping": "Date Scraping",  # ✅ Nouvelle colonne
     "cover_letter": "Cover letter",
     "score": "Score Match",
     "statut": "Statut",
@@ -78,11 +69,11 @@ COLUMNS = {
     "contact_mail": "contact mail",
 }
 
-# Ordre des statuts pour le pipeline Kanban
 PIPELINE_ORDER = ["À Analyser", "Générer LM", "Prêt", "Postulé", "Refus"]
 
-# Seuils de score
 SCORE_THRESHOLDS = {
     "high": 8,
     "medium": 5,
 }
+
+DEFAULT_STATUS = "À Analyser"
