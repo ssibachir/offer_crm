@@ -1,114 +1,210 @@
 """
-Page Inbox - File de validation (corrigée).
-==========================================
+Page Inbox - Jobs à Analyser.
+=============================
+Interface originale avec compteur dynamique et suppression.
 """
 
 import streamlit as st
 import pandas as pd
 
 from config.settings import COLUMNS, STATUS_CONFIG
-from components.cards import get_score_bg, get_score_color
-from database.airtable import update_job
-
-
-def render_inbox_card(job: pd.Series) -> dict:
-    """
-    Render une carte inbox et retourne les actions.
-    Utilise 100% Streamlit natif pour éviter les bugs HTML.
-    """
-    score = float(job[COLUMNS["score"]])
-    poste = str(job[COLUMNS["poste"]])
-    entreprise = str(job[COLUMNS["entreprise"]])
-    location = str(job[COLUMNS["location"]]) if job[COLUMNS["location"]] else ""
-    
-    bg = get_score_bg(score)
-    score_color = get_score_color(score)
-    
-    with st.container(border=True):
-        col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
-        
-        with col1:
-            st.markdown(f"**{poste}**")
-            info = f"🏢 {entreprise}"
-            if location:
-                info += f" • 📍 {location}"
-            st.caption(info)
-        
-        with col2:
-            st.markdown(
-                f'<div style="background: {bg}; color: {score_color}; '
-                f'padding: 0.4rem 0.6rem; border-radius: 15px; '
-                f'font-weight: 600; font-size: 0.9rem; text-align: center;">'
-                f'{score:.0f}/10</div>',
-                unsafe_allow_html=True
-            )
-        
-        with col3:
-            view = st.button("👁", key=f"view_{job['id']}", help="Voir détails")
-        
-        with col4:
-            generate = st.button("✍️", key=f"gen_{job['id']}", help="Générer LM")
-        
-        with col5:
-            reject = st.button("❌", key=f"reject_{job['id']}", help="Refuser")
-    
-    return {"view": view, "generate": generate, "reject": reject}
+from database.airtable import update_job, delete_job
 
 
 def render_inbox(df: pd.DataFrame, table) -> None:
-    """Affiche la file d'attente des jobs à analyser."""
+    """Page Inbox."""
     
-    st.markdown("## 📥 Inbox - Jobs à Analyser")
-    st.markdown("---")
+    # Header
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+            <span style="font-size: 1.5rem;">📧</span>
+            <h1 style="font-size: 1.5rem; font-weight: 700; color: #f8fafc; margin: 0;">
+                Inbox - Jobs à Analyser
+            </h1>
+        </div>
+    """, unsafe_allow_html=True)
     
-    to_review = df[df[COLUMNS["statut"]] == "À Analyser"].sort_values(
-        COLUMNS["score"], ascending=False
+    # Stats row
+    total = len(df[df[COLUMNS["statut"]] == "À Analyser"])
+    high_score = len(df[(df[COLUMNS["statut"]] == "À Analyser") & (df[COLUMNS["score"]] >= 8)])
+    avg_score = df[df[COLUMNS["statut"]] == "À Analyser"][COLUMNS["score"]].mean() if total > 0 else 0
+    
+    stat_cols = st.columns(3)
+    
+    with stat_cols[0]:
+        st.markdown(f"""
+            <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:1rem;text-align:center;">
+                <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.25rem;">À traiter</div>
+                <div style="font-size:1.75rem;font-weight:700;color:#f8fafc;">{total}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with stat_cols[1]:
+        st.markdown(f"""
+            <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:1rem;text-align:center;">
+                <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.25rem;">Score \geq 8</div>
+                <div style="font-size:1.75rem;font-weight:700;color:#4ade80;">{high_score}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with stat_cols[2]:
+        st.markdown(f"""
+            <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:1rem;text-align:center;">
+                <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.25rem;">Score moyen</div>
+                <div style="font-size:1.75rem;font-weight:700;color:#a78bfa;">{avg_score:.1f}</div>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+    
+    # Filtre par score
+    min_score = st.slider(
+        "Filtrer par score minimum",
+        min_value=0,
+        max_value=10,
+        value=0,
+        step=1,
+        key="score_filter"
     )
     
-    # === Metrics ===
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    # Filtrer les jobs : À Analyser + score >= min_score
+    filtered_df = df[
+        (df[COLUMNS["statut"]] == "À Analyser") & 
+        (df[COLUMNS["score"]] >= min_score)
+    ].sort_values(COLUMNS["score"], ascending=False)
     
-    with col1:
-        st.metric("À traiter", len(to_review))
-    with col2:
-        high = len(to_review[to_review[COLUMNS["score"]] >= 8])
-        st.metric("Score \geq 8", high)
-    with col3:
-        avg = to_review[COLUMNS["score"]].mean() if len(to_review) > 0 else 0
-        st.metric("Score moyen", f"{avg:.1f}")
-    with col4:
-        score_filter = st.slider(
-            "Filtrer par score minimum",
-            min_value=0,
-            max_value=10,
-            value=0,
-            key="inbox_filter"
-        )
+    filtered_count = len(filtered_df)
     
-    st.markdown("")
+    # Compteur dynamique
+    st.markdown(f"""
+        <div style="color:#64748b;font-size:0.85rem;margin:0.75rem 0 1rem 0;">
+            <strong style="color:#f8fafc;">{filtered_count}</strong> job(s) affiché(s)
+            {f'<span style="color:#a78bfa;margin-left:0.5rem;">(score \geq {min_score})</span>' if min_score > 0 else ''}
+        </div>
+    """, unsafe_allow_html=True)
     
-    # === Filtered List ===
-    filtered = to_review[to_review[COLUMNS["score"]] >= score_filter]
+    # Liste des jobs
+    if filtered_df.empty:
+        st.info("Aucun job ne correspond aux filtres")
+    else:
+        for _, job in filtered_df.iterrows():
+            render_job_card(job, table)
+
+
+def render_job_card(job: pd.Series, table) -> None:
+    """Carte job style original."""
     
-    if filtered.empty:
-        st.success("🎉 Inbox vide ! Tous les jobs ont été traités.")
-        return
+    job_id = job['id']
+    score = float(job[COLUMNS["score"]])
+    poste = str(job[COLUMNS["poste"]])
+    entreprise = str(job[COLUMNS["entreprise"]])
+    location = str(job[COLUMNS["location"]]) if pd.notna(job[COLUMNS["location"]]) else ""
+    source = str(job.get(COLUMNS.get("source", "source"), "")) if "source" in COLUMNS else ""
     
-    st.caption(f"{len(filtered)} job(s) affiché(s)")
+    # Style du score
+    if score >= 8:
+        score_bg, score_color = "rgba(74,222,128,0.15)", "#4ade80"
+    elif score >= 5:
+        score_bg, score_color = "rgba(251,146,60,0.15)", "#fb923c"
+    else:
+        score_bg, score_color = "rgba(248,113,113,0.15)", "#f87171"
     
-    # Job list
-    for _, job in filtered.iterrows():
-        actions = render_inbox_card(job)
+    with st.container(border=True):
+        # Layout principal
+        col_content, col_actions = st.columns([5, 1])
         
-        if actions["view"]:
-            st.session_state.selected_job_id = job['id']
-            st.session_state.current_page = "details"
-            st.rerun()
+        with col_content:
+            # Titre du poste
+            st.markdown(f"""
+                <div style="font-size:0.95rem;font-weight:600;color:#f8fafc;margin-bottom:0.4rem;">
+                    {poste[:70]}{'...' if len(poste) > 70 else ''}
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Source
+            if source:
+                st.markdown(f"""
+                    <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.25rem;">
+                        {source}
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Location
+            if location:
+                st.markdown(f"""
+                    <div style="font-size:0.8rem;color:#64748b;">
+                        📍 {location}
+                    </div>
+                """, unsafe_allow_html=True)
         
-        if actions["generate"]:
-            update_job(table, job['id'], {COLUMNS["statut"]: "Générer LM"})
-            st.rerun()
+        with col_actions:
+            # Score badge
+            st.markdown(f"""
+                <div style="background:{score_bg};color:{score_color};padding:0.35rem 0.6rem;border-radius:8px;font-size:0.85rem;font-weight:700;text-align:center;margin-bottom:0.5rem;">
+                    {score:.0f}/10
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Boutons d'action
+            btn_cols = st.columns(3)
+            
+            with btn_cols[0]:
+                if st.button("👁", key=f"view_{job_id}", help="Voir"):
+                    st.session_state.selected_job_id = job_id
+                    st.session_state.current_page = "details"
+                    st.rerun()
+            
+            with btn_cols[1]:
+                if st.button("✏️", key=f"edit_{job_id}", help="Éditer statut"):
+                    st.session_state[f"edit_{job_id}"] = True
+                    st.rerun()
+            
+            with btn_cols[2]:
+                if st.button("❌", key=f"del_{job_id}", help="Supprimer"):
+                    st.session_state[f"confirm_del_{job_id}"] = True
+                    st.rerun()
         
-        if actions["reject"]:
-            update_job(table, job['id'], {COLUMNS["statut"]: "Refus"})
-            st.rerun()
+        # Modal édition statut
+        if st.session_state.get(f"edit_{job_id}", False):
+            st.markdown("---")
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                new_status = st.selectbox(
+                    "Nouveau statut",
+                    options=["À Analyser", "Générer LM", "Prêt", "Postulé"],
+                    key=f"status_{job_id}",
+                    label_visibility="collapsed"
+                )
+            
+            with col2:
+                if st.button("✅ Valider", key=f"save_{job_id}"):
+                    update_job(table, job_id, {COLUMNS["statut"]: new_status})
+                    del st.session_state[f"edit_{job_id}"]
+                    st.rerun()
+            
+            with col3:
+                if st.button("↩️ Annuler", key=f"cancel_{job_id}"):
+                    del st.session_state[f"edit_{job_id}"]
+                    st.rerun()
+        
+        # Modal confirmation suppression
+        if st.session_state.get(f"confirm_del_{job_id}", False):
+            st.markdown("---")
+            st.error("⚠️ **Supprimer définitivement cette offre ?**")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("🗑️ Oui, supprimer", key=f"yes_{job_id}", type="primary"):
+                    try:
+                        delete_job(table, job_id)
+                        del st.session_state[f"confirm_del_{job_id}"]
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erreur: {e}")
+            
+            with col2:
+                if st.button("↩️ Annuler", key=f"no_{job_id}"):
+                    del st.session_state[f"confirm_del_{job_id}"]
+                    st.rerun()

@@ -340,9 +340,10 @@ def render_dashboard(df: pd.DataFrame) -> None:
             </div>
         """, unsafe_allow_html=True)
         
-        high_priority = df[df[COLUMNS["score"]] >= SCORE_THRESHOLDS["high"]].sort_values(
-            COLUMNS["score"], ascending=False
-        ).head(5)
+        high_priority = df[
+    (df[COLUMNS["score"]] >= SCORE_THRESHOLDS["high"]) & 
+    (df[COLUMNS["statut"]] == "À Analyser")
+].sort_values(COLUMNS["score"], ascending=False).head(5)
         
         if high_priority.empty:
             st.markdown("""

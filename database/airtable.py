@@ -72,7 +72,21 @@ def update_job(table, record_id: str, updates: dict) -> None:
     st.cache_data.clear()
 
 
-def delete_job(table, record_id: str) -> None:
-    """Supprime un job."""
-    table.delete(record_id)
-    st.cache_data.clear()
+def delete_job(table, record_id: str) -> bool:
+    """
+    Supprime un job de la base de données.
+    
+    Args:
+        table: Instance Airtable table
+        record_id: ID du record à supprimer
+    
+    Returns:
+        bool: True si suppression réussie, False sinon
+    """
+    try:
+        table.delete(record_id)
+        st.cache_data.clear()
+        return True  # ← Ajouter ce return !
+    except Exception as e:
+        print(f"❌ Erreur lors de la suppression: {e}")
+        return False
